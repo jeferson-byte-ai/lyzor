@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>LYZOR — Realtime Translation Hub</title>
+  <link rel="stylesheet" href="style.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script defer src="https://unpkg.com/lucide@latest"></script>
+  <script defer src="script.js"></script>
+</head>
+<body>
+  <div class="app">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="logo">LY</div>
+        <div class="brand-name">LYZOR</div>
+      </div>
+      <nav class="nav">
+        <button class="nav-item active" data-page="voice">
+          <i data-lucide="mic"></i>
+          <span>Voice Clone</span>
+        </button>
+        <button class="nav-item" data-page="languages">
+          <i data-lucide="languages"></i>
+          <span>Language Settings</span>
+        </button>
+        <button class="nav-item" data-page="integrations">
+          <i data-lucide="plug"></i>
+          <span>Integrations</span>
+        </button>
+        <button class="nav-item" data-page="meeting">
+          <i data-lucide="video"></i>
+          <span>Meeting Session</span>
+        </button>
+        <button class="nav-item" data-page="settings">
+          <i data-lucide="settings"></i>
+          <span>Settings</span>
+        </button>
+      </nav>
+      <div class="sidebar-footer">
+        <button id="themeToggle" class="ghost">
+          <i data-lucide="sun"></i>
+          <span>Light</span>
+        </button>
+      </div>
+    </aside>
+
+    <!-- Main content -->
+    <main class="main">
+      <header class="topbar">
+        <h1 class="title">Realtime Translation Hub</h1>
+        <div class="topbar-actions">
+          <div class="badge beta">MVP UI</div>
+        </div>
+      </header>
+
+      <!-- Voice Clone -->
+      <section id="voice" class="page active">
+        <div class="grid">
+          <div class="card">
+            <h2 class="card-title">Voice Cloning</h2>
+            <p class="muted">Upload a short sample (10–60s). This is a visual placeholder for now.</p>
+            <label class="file-input">
+              <input type="file" id="voiceFile" accept="audio/*" />
+              <span><i data-lucide="upload"></i> Choose audio file</span>
+            </label>
+            <button class="btn primary" disabled title="Will be enabled when backend is wired">
+              <i data-lucide="wand-2"></i>
+              Clone Voice (placeholder)
+            </button>
+          </div>
+          <div class="card">
+            <h3 class="card-title">Samples</h3>
+            <ul class="list">
+              <li class="list-item"><span class="dot"></span> Natural</li>
+              <li class="list-item"><span class="dot"></span> Energetic</li>
+              <li class="list-item"><span class="dot"></span> Calm</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- Languages -->
+      <section id="languages" class="page">
+        <div class="card">
+          <h2 class="card-title">Language Preferences</h2>
+          <p class="muted">Choose your speaking language and what you want to understand in meetings.</p>
+          <div class="form-row">
+            <label for="speakSelect">I speak</label>
+            <select id="speakSelect" class="select"></select>
+          </div>
+          <div class="form-row">
+            <label for="understandSelect">I want to understand</label>
+            <select id="understandSelect" class="select"></select>
+          </div>
+          <div class="actions">
+            <button id="saveLang" class="btn primary">
+              <i data-lucide="save"></i>
+              Save Preferences (local)
+            </button>
+            <span id="langStatus" class="muted"></span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Integrations -->
+      <section id="integrations" class="page">
+        <div class="card">
+          <h2 class="card-title">Platform Integrations</h2>
+          <p class="muted">Connect your favorite platforms. Buttons are placeholders until backend integration.</p>
+          <div class="integration-grid">
+            <div class="integration-card"><div class="badge-icon">ZM</div><div class="integration-name">Zoom</div><div class="integration-status off">Not connected</div><button class="btn" disabled>Connect</button></div>
+            <div class="integration-card"><div class="badge-icon">GM</div><div class="integration-name">Google Meet</div><div class="integration-status off">Not connected</div><button class="btn" disabled>Connect</button></div>
+            <div class="integration-card"><div class="badge-icon">MS</div><div class="integration-name">Microsoft Teams</div><div class="integration-status off">Not connected</div><button class="btn" disabled>Connect</button></div>
+            <div class="integration-card"><div class="badge-icon">WX</div><div class="integration-name">Webex</div><div class="integration-status off">Not connected</div><button class="btn" disabled>Connect</button></div>
+            <div class="integration-card"><div class="badge-icon">SL</div><div class="integration-name">Slack</div><div class="integration-status off">Not connected</div><button class="btn" disabled>Connect</button></div>
+            <div class="integration-card"><div class="badge-icon">DC</div><div class="integration-name">Discord</div><div class="integration-status off">Not connected</div><button class="btn" disabled>Connect</button></div>
+            <div class="integration-card"><div class="badge-icon">TG</div><div class="integration-name">Telegram</div><div class="integration-status off">Not connected</div><button class="btn" disabled>Connect</button></div>
+            <div class="integration-card"><div class="badge-icon">WA</div><div class="integration-name">WhatsApp</div><div class="integration-status off">Not connected</div><button class="btn" disabled>Connect</button></div>
+            <div class="integration-card"><div class="badge-icon">TW</div><div class="integration-name">Twitch</div><div class="integration-status off">Not connected</div><button class="btn" disabled>Connect</button></div>
+            <div class="integration-card"><div class="badge-icon">YT</div><div class="integration-name">YouTube Live</div><div class="integration-status off">Not connected</div><button class="btn" disabled>Connect</button></div>
+            <div class="integration-card"><div class="badge-icon">BD</div><div class="integration-name">Badoo</div><div class="integration-status off">Not connected</div><button class="btn" disabled>Connect</button></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Meeting -->
+      <section id="meeting" class="page">
+        <div class="card">
+          <h2 class="card-title">Meeting Session</h2>
+          <p class="muted">Control your session. This is visual only for now.</p>
+          <div class="actions">
+            <button class="btn primary" disabled><i data-lucide="play"></i> Start</button>
+            <button class="btn" disabled><i data-lucide="square"></i> Stop</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Settings -->
+      <section id="settings" class="page">
+        <div class="card">
+          <h2 class="card-title">App Settings</h2>
+          <div class="form-row inline">
+            <label>Theme</label>
+            <button id="themeToggle2" class="btn outline"><i data-lucide="sun"></i> Toggle Light/Dark</button>
+          </div>
+          <div class="form-row inline">
+            <label>Density</label>
+            <select id="density" class="select">
+              <option value="comfortable">Comfortable</option>
+              <option value="compact">Compact</option>
+            </select>
+          </div>
+        </div>
+      </section>
+
+      <footer class="footer">
+        <span class="muted">© 2025 LYZOR — UI prototype</span>
+      </footer>
+    </main>
+  </div>
+</body>
+</html>
