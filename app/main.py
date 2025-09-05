@@ -1,11 +1,13 @@
 import os
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
+from sqlalchemy.ext.asyncio import AsyncSession
+from app.db.session import get_db
 
 # =========================
-# Import routers
+# Import routers existentes
 # =========================
 from app.api import stream
 from app.api.routes_session import router as session_router
@@ -14,11 +16,15 @@ from app.api.routes_translate import router as translate_router
 from app.api.routes_integrations import router as integrations_router
 from app.api import voice_catalog_routes, voice_mapping_routes
 
-
 # =========================
 # Import UserSettingsManager
 # =========================
 from app.user_settings.manager import UserSettingsManager
+
+# =========================
+# Import Auth routes seguros
+# =========================
+from app.routes.auth_crypto import router as auth_router  # Atualizado para CRUD criptografado
 
 # =========================
 # FastAPI app
@@ -46,6 +52,11 @@ app.include_router(translate_router, prefix="/api/translate", tags=["translate"]
 app.include_router(integrations_router, prefix="/api/integration", tags=["integration"])
 app.include_router(voice_catalog_routes.router, prefix="/api/voice_catalog", tags=["voice_catalog"])
 app.include_router(voice_mapping_routes.router, prefix="/api/voice_mapping", tags=["voice_mapping"])
+
+# =========================
+# Auth routes seguros (Google/Microsoft/Phone)
+# =========================
+app.include_router(auth_router, prefix="/api", tags=["auth"])
 
 # =========================
 # Voice directory
