@@ -1,4 +1,3 @@
-# app/core/translate.py
 import logging
 from langdetect import detect
 

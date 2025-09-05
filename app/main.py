@@ -5,6 +5,10 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import get_db
+from dotenv import load_dotenv
+
+dotenv_path = os.path.join(os.path.dirname(__file__), ".env")
+load_dotenv(dotenv_path)
 
 # =========================
 # Import routers existentes
@@ -157,3 +161,27 @@ async def update_notification_settings(user_id: str, meeting_transcription: bool
         return {"message": "Notification settings updated."}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+# =========================
+# Test Encryption / Decryption
+# =========================
+from app.shield import encrypt_data, decrypt_data
+from fastapi import Query
+
+@app.get("/test/encrypt", tags=["test"])
+async def test_encrypt(text: str = Query(..., description="Text to encrypt")):
+    """
+    Test encryption with FERNET_KEY
+    Example: /test/encrypt?text=HelloWorld
+    """
+    encrypted = encrypt_data(text)
+    return {"original": text, "encrypted": encrypted}
+
+@app.get("/test/decrypt", tags=["test"])
+async def test_decrypt(cipher: str = Query(..., description="Encrypted text to decrypt")):
+    """
+    Test decryption with FERNET_KEY
+    Example: /test/decrypt?cipher=...
+    """
+    decrypted = decrypt_data(cipher)
+    return {"encrypted": cipher, "decrypted": decrypted}
