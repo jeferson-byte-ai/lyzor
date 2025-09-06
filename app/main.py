@@ -28,8 +28,8 @@ from app.user_settings.manager import UserSettingsManager
 # =========================
 # Import Auth routes seguros
 # =========================
-from app.routes.auth_crypto import router as auth_router  # Atualizado para CRUD criptografado
-
+from app.routes.auth import router as auth_router
+from app.routes import auth
 # =========================
 # FastAPI app
 # =========================
@@ -61,6 +61,8 @@ app.include_router(voice_mapping_routes.router, prefix="/api/voice_mapping", tag
 # Auth routes seguros (Google/Microsoft/Phone)
 # =========================
 app.include_router(auth_router, prefix="/api", tags=["auth"])
+app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
+
 
 # =========================
 # Voice directory

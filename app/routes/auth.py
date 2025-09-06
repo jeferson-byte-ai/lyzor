@@ -1,36 +1,65 @@
-from fastapi import APIRouter, Depends, HTTPException
+# app/routes/auth.py
+from fastapi import APIRouter, Depends, HTTPException, Form
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import get_db
 from app.crud.users import create_user_oauth, get_user_by_google, get_user_by_microsoft, get_user_by_phone
-import random
+from app.db.models.users import User
+from app.shield.security import get_password_hash
+from shield import create_access_token, create_refresh_token, encrypt_data
+import random, os, jwt, smtplib
+from datetime import datetime, timedelta
+from email.mime.text import MIMEText
+from sqlalchemy.future import select
 
-# Twilio
+# ----------------------
+# Twilio for OTP SMS
+# ----------------------
 from twilio.rest import Client
-TWILIO_ACCOUNT_SID = "YOUR_TWILIO_SID"
-TWILIO_AUTH_TOKEN = "YOUR_TWILIO_AUTH_TOKEN"
-TWILIO_PHONE_NUMBER = "+1234567890"
+TWILIO_ACCOUNT_SID = os.getenv("TWILIO_SID")
+TWILIO_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN")
+TWILIO_PHONE_NUMBER = os.getenv("TWILIO_PHONE_NUMBER")
 twilio_client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
 
+# ----------------------
 # Google OAuth2
+# ----------------------
 from google.oauth2 import id_token
 from google.auth.transport import requests
-GOOGLE_CLIENT_ID = "YOUR_GOOGLE_CLIENT_ID"
+GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
 
+# ----------------------
 # Microsoft OAuth2
+# ----------------------
 from msal import ConfidentialClientApplication
-MICROSOFT_CLIENT_ID = "YOUR_MICROSOFT_APP_ID"
-MICROSOFT_CLIENT_SECRET = "YOUR_MICROSOFT_SECRET"
+MICROSOFT_CLIENT_ID = os.getenv("MICROSOFT_APP_ID")
+MICROSOFT_CLIENT_SECRET = os.getenv("MICROSOFT_SECRET")
 MICROSOFT_AUTHORITY = "https://login.microsoftonline.com/common"
 
-# Shield
-from shield import create_access_token, create_refresh_token, encrypt_data
+# ----------------------
+# Email (SMTP Gmail / SendGrid)
+# ----------------------
+SMTP_HOST = os.getenv("SMTP_HOST", "smtp.gmail.com")
+SMTP_PORT = int(os.getenv("SMTP_PORT", 587))
+SMTP_USER = os.getenv("SMTP_USER")
+SMTP_PASS = os.getenv("SMTP_PASS")
 
-# Simple OTP cache
+# ----------------------
+# JWT reset password
+# ----------------------
+SECRET_KEY = os.getenv("SECRET_KEY", "supersecret")
+ALGORITHM = "HS256"
+RESET_TOKEN_EXPIRE_MINUTES = 30
+
+# ----------------------
+# OTP cache
+# ----------------------
 otp_store = {}
 
 router = APIRouter()
 
-# ===== OTP SMS =====
+# ======================
+# Phone OTP
+# ======================
 def send_otp(phone_number: str) -> str:
     otp = str(random.randint(100000, 999999))
     otp_store[phone_number] = otp
@@ -59,7 +88,6 @@ async def verify_phone_otp(phone_number: str, otp: str, db: AsyncSession = Depen
 
     user = await get_user_by_phone(db, phone_number)
     if not user:
-        # Encrypt sensitive data before saving
         encrypted_phone = encrypt_data(phone_number)
         user = await create_user_oauth(
             db,
@@ -68,7 +96,6 @@ async def verify_phone_otp(phone_number: str, otp: str, db: AsyncSession = Depen
             phone_verified=True
         )
 
-    # Generate JWT tokens
     access_token = create_access_token({"sub": str(user.id)})
     refresh_token = create_refresh_token({"sub": str(user.id)})
 
@@ -79,7 +106,9 @@ async def verify_phone_otp(phone_number: str, otp: str, db: AsyncSession = Depen
         "refresh_token": refresh_token
     }
 
-# ===== Google OAuth2 =====
+# ======================
+# Google OAuth2
+# ======================
 @router.post("/auth/google")
 async def login_google(token: str, db: AsyncSession = Depends(get_db)):
     try:
@@ -109,7 +138,9 @@ async def login_google(token: str, db: AsyncSession = Depends(get_db)):
         "refresh_token": refresh_token
     }
 
-# ===== Microsoft OAuth2 =====
+# ======================
+# Microsoft OAuth2
+# ======================
 @router.post("/auth/microsoft")
 async def login_microsoft(token: str, db: AsyncSession = Depends(get_db)):
     app_msal = ConfidentialClientApplication(
@@ -143,3 +174,57 @@ async def login_microsoft(token: str, db: AsyncSession = Depends(get_db)):
         "access_token": access_token,
         "refresh_token": refresh_token
     }
+
+# ======================
+# Password Reset via Email
+# ======================
+def create_reset_token(user_id: int):
+    expire = datetime.utcnow() + timedelta(minutes=RESET_TOKEN_EXPIRE_MINUTES)
+    to_encode = {"sub": str(user_id), "exp": expire}
+    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+
+def send_reset_email(email: str, token: str):
+    reset_link = f"https://lyzor.com/reset-password?token={token}"  # real frontend URL
+    msg = MIMEText(f"Click here to reset your password: {reset_link}")
+    msg["Subject"] = "Lyzor - Password Reset"
+    msg["From"] = SMTP_USER
+    msg["To"] = email
+
+    try:
+        with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
+            server.starttls()
+            server.login(SMTP_USER, SMTP_PASS)
+            server.sendmail(SMTP_USER, [email], msg.as_string())
+    except Exception as e:
+        print("Error sending email:", e)
+        raise HTTPException(status_code=500, detail="Error sending email")
+
+@router.post("/auth/forgot-password")
+async def forgot_password(email: str, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(User).where(User.email == email))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    token = create_reset_token(user.id)
+    send_reset_email(email, token)
+    return {"msg": "If the email exists, a reset link has been sent."}
+
+@router.post("/auth/reset-password")
+async def reset_password(token: str, new_password: str, db: AsyncSession = Depends(get_db)):
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        user_id: str = payload.get("sub")
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=400, detail="Token expired")
+    except jwt.PyJWTError:
+        raise HTTPException(status_code=400, detail="Invalid token")
+
+    result = await db.execute(select(User).where(User.id == int(user_id)))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    user.hashed_password = get_password_hash(new_password)
+    await db.commit()
+    return {"msg": "Password successfully reset"}

@@ -20,11 +20,19 @@ def verify_password(password: str, hashed: str) -> bool:
 # ----------------------
 SECRET_KEY = os.getenv("JWT_SECRET_KEY", "super_secret_key")
 ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 15))
+REFRESH_TOKEN_EXPIRE_DAYS = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", 7))
 
-def create_access_token(data: dict, expires_minutes: int = 15):
+def create_access_token(data: dict, expires_minutes: int = ACCESS_TOKEN_EXPIRE_MINUTES):
     to_encode = data.copy()
     expire = datetime.utcnow() + timedelta(minutes=expires_minutes)
     to_encode.update({"exp": expire})
+    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+
+def create_refresh_token(data: dict, expires_days: int = REFRESH_TOKEN_EXPIRE_DAYS):
+    to_encode = data.copy()
+    expire = datetime.utcnow() + timedelta(days=expires_days)
+    to_encode.update({"exp": expire, "type": "refresh"})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 def decode_access_token(token: str) -> dict:
@@ -33,7 +41,10 @@ def decode_access_token(token: str) -> dict:
 # ----------------------
 # AES-256 Encryption for sensitive data
 # ----------------------
-FERNET_KEY = os.getenv("FERNET_KEY", Fernet.generate_key().decode())
+FERNET_KEY = os.getenv("FERNET_KEY")
+if not FERNET_KEY:
+    raise RuntimeError("Missing FERNET_KEY in environment variables!")
+
 fernet = Fernet(FERNET_KEY.encode() if isinstance(FERNET_KEY, str) else FERNET_KEY)
 
 def encrypt_data(plain_text: str) -> str:
