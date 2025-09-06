@@ -1,8 +1,9 @@
-from passlib.context import CryptContext
-from cryptography.fernet import Fernet
+# app/shield/security.py
+import os
 from datetime import datetime, timedelta
 import jwt
-import os
+from passlib.context import CryptContext
+from cryptography.fernet import Fernet
 
 # ----------------------
 # Password hashing
@@ -10,10 +11,15 @@ import os
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 def hash_password(password: str) -> str:
+    """Hash a plain password"""
     return pwd_context.hash(password)
 
 def verify_password(password: str, hashed: str) -> bool:
+    """Verify a plain password against its hash"""
     return pwd_context.verify(password, hashed)
+
+# Alias antigo para compatibilidade
+get_password_hash = hash_password
 
 # ----------------------
 # JWT Authentication
@@ -48,7 +54,9 @@ if not FERNET_KEY:
 fernet = Fernet(FERNET_KEY.encode() if isinstance(FERNET_KEY, str) else FERNET_KEY)
 
 def encrypt_data(plain_text: str) -> str:
+    """Encrypt a string using Fernet"""
     return fernet.encrypt(plain_text.encode()).decode()
 
 def decrypt_data(encrypted_text: str) -> str:
+    """Decrypt a string using Fernet"""
     return fernet.decrypt(encrypted_text.encode()).decode()

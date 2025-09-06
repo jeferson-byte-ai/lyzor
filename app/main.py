@@ -1,14 +1,17 @@
 import os
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Depends
+from dotenv import load_dotenv
+
+dotenv_path = os.path.join(os.path.dirname(__file__), ".env")
+load_dotenv(dotenv_path)
+
+from fastapi import FastAPI, UploadFile, File, Form,Query, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import get_db
-from dotenv import load_dotenv
+from app.shield.security import encrypt_data, decrypt_data
 
-dotenv_path = os.path.join(os.path.dirname(__file__), ".env")
-load_dotenv(dotenv_path)
 
 # =========================
 # Import routers existentes
@@ -167,8 +170,6 @@ async def update_notification_settings(user_id: str, meeting_transcription: bool
 # =========================
 # Test Encryption / Decryption
 # =========================
-from app.shield import encrypt_data, decrypt_data
-from fastapi import Query
 
 @app.get("/test/encrypt", tags=["test"])
 async def test_encrypt(text: str = Query(..., description="Text to encrypt")):

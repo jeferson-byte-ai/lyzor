@@ -4,7 +4,7 @@ from app.db.models.users import User
 import uuid
 
 # Shield
-from shield import hash_password, encrypt_data, decrypt_data
+from app.shield.security import hash_password, encrypt_data, decrypt_data
 
 # =========================
 # Basic User CRUD

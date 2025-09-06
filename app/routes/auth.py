@@ -4,8 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import get_db
 from app.crud.users import create_user_oauth, get_user_by_google, get_user_by_microsoft, get_user_by_phone
 from app.db.models.users import User
-from app.shield.security import get_password_hash
-from shield import create_access_token, create_refresh_token, encrypt_data
+from app.shield.security import hash_password, create_access_token, create_refresh_token, encrypt_data  # <- corrigido
 import random, os, jwt, smtplib
 from datetime import datetime, timedelta
 from email.mime.text import MIMEText
@@ -225,6 +224,6 @@ async def reset_password(token: str, new_password: str, db: AsyncSession = Depen
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    user.hashed_password = get_password_hash(new_password)
+    user.hashed_password = hash_password(new_password)  # <- corrigido
     await db.commit()
     return {"msg": "Password successfully reset"}
