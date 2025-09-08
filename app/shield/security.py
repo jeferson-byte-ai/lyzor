@@ -60,3 +60,19 @@ def encrypt_data(plain_text: str) -> str:
 def decrypt_data(encrypted_text: str) -> str:
     """Decrypt a string using Fernet"""
     return fernet.decrypt(encrypted_text.encode()).decode()
+
+# =======================
+# JWT Token Blacklist
+# =======================
+jwt_blacklist = set()
+
+def add_token_to_blacklist(token: str):
+    jwt_blacklist.add(token)
+
+def is_token_blacklisted(token: str) -> bool:
+    return token in jwt_blacklist
+
+def decode_access_token(token: str) -> dict:
+    if is_token_blacklisted(token):
+        raise Exception("Token has been revoked.")
+    return jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])

@@ -4,14 +4,16 @@ from dotenv import load_dotenv
 dotenv_path = os.path.join(os.path.dirname(__file__), ".env")
 load_dotenv(dotenv_path)
 
-from fastapi import FastAPI, UploadFile, File, Form,Query, HTTPException, Depends
+from fastapi import FastAPI, UploadFile, File, Form, Query, HTTPException, Depends, Body, Header
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.db.session import get_db
-from app.shield.security import encrypt_data, decrypt_data
+from sqlalchemy import select
 
+from app.db.session import get_db
+from app.shield.security import encrypt_data, decrypt_data, decode_access_token, add_token_to_blacklist, is_token_blacklisted
+from fastapi.security import OAuth2PasswordBearer
 
 # =========================
 # Import routers existentes
@@ -24,19 +26,22 @@ from app.api.routes_integrations import router as integrations_router
 from app.api import voice_catalog_routes, voice_mapping_routes
 
 # =========================
-# Import UserSettingsManager
+# UserSettingsManager
 # =========================
 from app.user_settings.manager import UserSettingsManager
+settings_manager = UserSettingsManager()
 
 # =========================
-# Import Auth routes seguros
+# Auth routes
 # =========================
 from app.routes.auth import router as auth_router
-from app.routes import auth
+from app.db.models.users import User  # Para /me endpoint
+from app.crud.users import get_user as get_user_by_id
+
 # =========================
 # FastAPI app
 # =========================
-app = FastAPI(title="LYZOR Realtime Translation + Voice Clone")
+app = FastAPI(title="LYZOR-Translation Hub")
 
 # =========================
 # Middleware
@@ -59,13 +64,71 @@ app.include_router(translate_router, prefix="/api/translate", tags=["translate"]
 app.include_router(integrations_router, prefix="/api/integration", tags=["integration"])
 app.include_router(voice_catalog_routes.router, prefix="/api/voice_catalog", tags=["voice_catalog"])
 app.include_router(voice_mapping_routes.router, prefix="/api/voice_mapping", tags=["voice_mapping"])
+app.include_router(auth_router, prefix="/api/auth", tags=["auth"])
 
 # =========================
-# Auth routes seguros (Google/Microsoft/Phone)
+# JWT Dependency
 # =========================
-app.include_router(auth_router, prefix="/api", tags=["auth"])
-app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
+from uuid import UUID as UUIDType
 
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
+
+async def get_current_user(token: str = Depends(oauth2_scheme), db: AsyncSession = Depends(get_db)):
+    try:
+        if is_token_blacklisted(token):
+            raise HTTPException(status_code=401, detail="Token has been revoked")
+        payload = decode_access_token(token)
+        user_id: str = payload.get("sub")
+        if user_id is None:
+            raise HTTPException(status_code=401, detail="Invalid token")
+        user_uuid = UUIDType(user_id) 
+    except Exception:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+    user = await get_user_by_id(db, user_uuid)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    return user
+
+# =========================
+# New endpoint: GET /me
+# =========================
+@app.get("/api/auth/me", tags=["auth"])
+async def read_me(current_user=Depends(get_current_user)):
+    return {
+        "user_id": str(current_user.id),
+        "username": current_user.username,
+        "email": decrypt_data(current_user.email) if current_user.email else None,
+        "phone_number": decrypt_data(current_user.phone_number) if current_user.phone_number else None
+    }
+
+# =========================
+# Logout endpoint com blacklist
+# =========================
+@app.post("/api/auth/logout", tags=["auth"])
+async def logout(authorization: str = Header(...)):
+    token = authorization.replace("Bearer ", "")
+    add_token_to_blacklist(token)
+    return {"message": "Logout successful. Token revoked."}
+
+# =========================
+# PATCH User Settings Endpoints
+# =========================
+@app.patch("/settings/{user_id}/general", tags=["settings"])
+async def patch_general_settings(user_id: str, updates: dict = Body(...)):
+    try:
+        settings_manager.update_settings(user_id, "general", updates)
+        return {"message": "General settings updated."}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@app.patch("/settings/{user_id}/notifications", tags=["settings"])
+async def patch_notification_settings(user_id: str, updates: dict = Body(...)):
+    try:
+        settings_manager.update_settings(user_id, "notifications", updates)
+        return {"message": "Notification settings updated."}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 # =========================
 # Voice directory
@@ -79,7 +142,7 @@ def get_user_voice(user_id: str):
     return path if os.path.exists(path) else default_speaker_wav
 
 # =========================
-# Languages (25 idiomas)
+# Languages
 # =========================
 LANGUAGES = [
     {"code": "en", "name": "English 🇺🇸"}, {"code": "pt", "name": "Portuguese 🇧🇷"}, {"code": "es", "name": "Spanish 🇪🇸"},
@@ -127,10 +190,8 @@ async def serve_frontend():
         return f.read()
 
 # =========================
-# User Settings Manager
+# Existing User Settings GET/PUT
 # =========================
-settings_manager = UserSettingsManager()
-
 @app.get("/settings/{user_id}", tags=["settings"])
 async def get_user_settings(user_id: str):
     try:
@@ -153,7 +214,12 @@ async def update_general_settings(user_id: str, theme: str = None, language: str
         raise HTTPException(status_code=400, detail=str(e))
 
 @app.put("/settings/{user_id}/notifications", tags=["settings"])
-async def update_notification_settings(user_id: str, meeting_transcription: bool = None, voice_clone_alerts: bool = None, platform_updates: bool = None):
+async def update_notification_settings(
+    user_id: str,
+    meeting_transcription: bool = None,
+    voice_clone_alerts: bool = None,
+    platform_updates: bool = None
+):
     updates = {}
     if meeting_transcription is not None:
         updates["meeting_transcription"] = meeting_transcription
@@ -168,23 +234,15 @@ async def update_notification_settings(user_id: str, meeting_transcription: bool
         raise HTTPException(status_code=400, detail=str(e))
 
 # =========================
-# Test Encryption / Decryption
+# Development-only test routes
 # =========================
+if os.getenv("ENV") != "production":
+    @app.get("/test/encrypt", tags=["test"])
+    async def test_encrypt(text: str = Query(..., description="Text to encrypt")):
+        encrypted = encrypt_data(text)
+        return {"original": text, "encrypted": encrypted}
 
-@app.get("/test/encrypt", tags=["test"])
-async def test_encrypt(text: str = Query(..., description="Text to encrypt")):
-    """
-    Test encryption with FERNET_KEY
-    Example: /test/encrypt?text=HelloWorld
-    """
-    encrypted = encrypt_data(text)
-    return {"original": text, "encrypted": encrypted}
-
-@app.get("/test/decrypt", tags=["test"])
-async def test_decrypt(cipher: str = Query(..., description="Encrypted text to decrypt")):
-    """
-    Test decryption with FERNET_KEY
-    Example: /test/decrypt?cipher=...
-    """
-    decrypted = decrypt_data(cipher)
-    return {"encrypted": cipher, "decrypted": decrypted}
+    @app.get("/test/decrypt", tags=["test"])
+    async def test_decrypt(cipher: str = Query(..., description="Encrypted text to decrypt")):
+        decrypted = decrypt_data(cipher)
+        return {"encrypted": cipher, "decrypted": decrypted}
